@@ -15,7 +15,7 @@ import {
   getFirestore,
   collection,
   addDoc,
-  //   doc,
+  doc,
   //   setDoc,
   updateDoc,
   serverTimestamp,
@@ -71,6 +71,9 @@ const textareaEl = document.getElementById("post-input");
 const postButtonEl = document.getElementById("post-btn");
 
 // const fetchPostsButtonEl = document.getElementById("fetch-posts-btn");
+const allFilterButtonEl = document.getElementById("all-filter-btn");
+
+const filterButtonEls = document.getElementsByClassName("filter-btn");
 
 const postsEl = document.getElementById("posts");
 
@@ -87,6 +90,10 @@ updateProfileButtonEl.addEventListener("click", authUpdateProfile);
 
 for (let moodEmojiEl of moodEmojiEls) {
   moodEmojiEl.addEventListener("click", selectMood);
+}
+
+for (let filterButtonEl of filterButtonEls) {
+  filterButtonEl.addEventListener("click", selectFilter);
 }
 
 postButtonEl.addEventListener("click", postButtonPressed);
@@ -108,7 +115,9 @@ onAuthStateChanged(auth, (user) => {
     showLoggedInView();
     showProfilePicture(userProfilePictureEl, user);
     showUserGreeting(userGreetingEl, user);
-    fetchInRealtimeAndRenderPostsFromDB(user);
+    updateFilterButtonStyle(allFilterButtonEl);
+    fetchAllPosts(user);
+    // fetchInRealtimeAndRenderPostsFromDB(user);
   } else {
     showLoggedOutView();
   }
@@ -217,6 +226,23 @@ async function addPostToDB(postBody, user) {
   //   }
 }
 
+async function updatePostInDB(docId, newBody) {
+  const docRef = doc(db, postsCollection, docId);
+
+  await updateDoc(docRef, {
+    body: newBody,
+  });
+  /* Challenge:
+        Import updateDoc and doc from 'firebase/firestore'
+        
+        Use the code from the documentation to make this function work.
+        
+        The function should update the correct post in the database using the docId.
+        
+        The body field should be updated with newBody as the new value.
+     */
+}
+
 // -------- FOR FETCH BUTTON -------------
 // async function fetchOnceAndRenderPostsFromDB() {
 //   const querySnapshot = await getDocs(collection(db, "posts"));
@@ -227,41 +253,176 @@ async function addPostToDB(postBody, user) {
 //   });
 // }
 
-function fetchInRealtimeAndRenderPostsFromDB(user) {
+function fetchInRealtimeAndRenderPostsFromDB(query, user) {
+  onSnapshot(query, (querySnapshot) => {
+    clearAll(postsEl);
+    querySnapshot.forEach((doc) => {
+      renderPost(postsEl, doc);
+    });
+  });
+}
+
+function fetchTodayPosts(user) {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+
   const postsRef = collection(db, postsCollection);
-  /* Challenge: Change the query to use orderBy to order by date, with the newest posts on top.                 You'll need to import the orderBy function from 'firebase/firestore' first. */
+
+  const q = query(
+    postsRef,
+    where("user", "==", user.uid),
+    where("createdAt", ">=", startOfDay),
+    where("createdAt", "<=", endOfDay),
+    orderBy("createdAt", "desc")
+  );
+  fetchInRealtimeAndRenderPostsFromDB(q, user);
+}
+function fetchWeekPosts(user) {
+  const startOfWeek = new Date();
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  if (startOfWeek.getDay() === 0) {
+    // If today is Sunday
+    startOfWeek.setDate(startOfWeek.getDate() - 6); // Go to previous Monday
+  } else {
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
+  }
+
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const postsRef = collection(db, postsCollection);
+
+  const q = query(
+    postsRef,
+    where("user", "==", user.uid),
+    where("createdAt", ">=", startOfWeek),
+    where("createdAt", "<=", endOfDay),
+    orderBy("createdAt", "desc")
+  );
+  fetchInRealtimeAndRenderPostsFromDB(q, user);
+}
+
+function fetchMonthPosts(user) {
+  const startOfMonth = new Date();
+  startOfMonth.setHours(0, 0, 0, 0);
+  startOfMonth.setDate(1);
+
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const postsRef = collection(db, postsCollection);
+
+  const q = query(
+    postsRef,
+    where("user", "==", user.uid),
+    where("createdAt", ">=", startOfMonth),
+    where("createdAt", "<=", endOfDay),
+    orderBy("createdAt", "desc")
+  );
+  fetchInRealtimeAndRenderPostsFromDB(q, user);
+}
+
+function fetchAllPosts(user) {
+  const postsRef = collection(db, postsCollection);
+
   const q = query(
     postsRef,
     where("user", "==", user.uid),
     orderBy("createdAt", "desc")
   );
-  //   const q = query(postsRef, where("user", "==", user.uid));
-
-  onSnapshot(q, (querySnapshot) => {
-    clearAll(postsEl);
-    querySnapshot.forEach((doc) => {
-      renderPost(postsEl, doc.data());
-    });
-  });
+  fetchInRealtimeAndRenderPostsFromDB(q, user);
 }
 
 /* == Functions - UI Functions == */
-function renderPost(postsEl, { createdAt, body, mood }) {
-  postsEl.innerHTML += ` 
-   <div class="post">
-   <div class="header">
-     <h3>${displayDate(createdAt)}</h3>
-     <img src="assets/emojis/${mood}.png" />
-   </div>
-   <p>
-     ${body}
-   </p>
- </div>`;
+
+function createPostHeader(postData) {
+  /*
+        <div class="header">
+        </div>
+    */
+  const headerDiv = document.createElement("div");
+  headerDiv.className = "header";
+
+  /* 
+            <h3>21 Sep 2023 - 14:35</h3>
+        */
+  const headerDate = document.createElement("h3");
+  headerDate.textContent = displayDate(postData.createdAt);
+  headerDiv.appendChild(headerDate);
+
+  /* 
+            <img src="assets/emojis/5.png">
+        */
+  const moodImage = document.createElement("img");
+  moodImage.src = `assets/emojis/${postData.mood}.png`;
+  headerDiv.appendChild(moodImage);
+
+  return headerDiv;
+}
+
+function createPostBody(postData) {
+  /*
+        <p>This is a post</p>
+    */
+  const postBody = document.createElement("p");
+  postBody.innerHTML = replaceNewlinesWithBrTags(postData.body);
+
+  return postBody;
+}
+
+function createPostUpdateButton(wholeDoc) {
+  const postId = wholeDoc.id;
+  const postData = wholeDoc.data();
+  /* 
+        <button class="edit-color">Edit</button>
+    */
+  const button = document.createElement("button");
+  button.textContent = "Edit";
+  button.classList.add("edit-color");
+  button.addEventListener("click", function () {
+    const newBody = prompt("Edit the post", postData.body);
+
+    if (newBody) {
+      console.log(newBody);
+      updatePostInDB(postId, newBody);
+    }
+  });
+
+  return button;
+}
+
+function createPostFooter(wholeDoc) {
+  /* 
+        <div class="footer">
+            <button>Edit</button>
+        </div>
+    */
+  const footerDiv = document.createElement("div");
+  footerDiv.className = "footer";
+
+  footerDiv.appendChild(createPostUpdateButton(wholeDoc));
+
+  return footerDiv;
+}
+
+function renderPost(postsEl, wholeDoc) {
+  const postData = wholeDoc.data();
+  const postDiv = document.createElement("div");
+  postDiv.className = "post";
+
+  postDiv.appendChild(createPostHeader(postData));
+  postDiv.appendChild(createPostBody(postData));
+  postDiv.appendChild(createPostFooter(wholeDoc));
+
+  postsEl.appendChild(postDiv);
 }
 
 function replaceNewlinesWithBrTags(inputString) {
-  // Challenge: Use the replace method on inputString to replace newlines with break tags and return the result
-  return inputString.replace(/\n/g, "<br/>");
+  return inputString.replace(/\n/g, "<br>");
 }
 
 function postButtonPressed() {
@@ -400,4 +561,46 @@ function resetAllMoodElements(allMoodElements) {
 
 function returnMoodValueFromElementId(elementId) {
   return Number(elementId.slice(5));
+}
+
+/* == Functions - UI Functions - Date Filters == */
+
+function resetAllFilterButtons(allFilterButtons) {
+  for (let filterButtonEl of allFilterButtons) {
+    filterButtonEl.classList.remove("selected-filter");
+  }
+}
+
+function updateFilterButtonStyle(element) {
+  element.classList.add("selected-filter");
+}
+
+function fetchPostsFromPeriod(period, user) {
+  if (period === "today") {
+    fetchTodayPosts(user);
+  } else if (period === "week") {
+    fetchWeekPosts(user);
+  } else if (period === "month") {
+    fetchMonthPosts(user);
+  } else {
+    fetchAllPosts(user);
+  }
+}
+
+function selectFilter(event) {
+  const user = auth.currentUser;
+
+  const selectedFilterElementId = event.target.id;
+
+  const selectedFilterPeriod = selectedFilterElementId.split("-")[0];
+
+  const selectedFilterElement = document.getElementById(
+    selectedFilterElementId
+  );
+
+  resetAllFilterButtons(filterButtonEls);
+
+  updateFilterButtonStyle(selectedFilterElement);
+
+  fetchPostsFromPeriod(selectedFilterPeriod, user);
 }
