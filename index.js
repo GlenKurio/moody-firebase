@@ -24,6 +24,7 @@ import {
   query,
   where,
   orderBy,
+  deleteDoc,
 } from "firebase/firestore";
 
 /* === Firebase Setup === */
@@ -232,15 +233,6 @@ async function updatePostInDB(docId, newBody) {
   await updateDoc(docRef, {
     body: newBody,
   });
-  /* Challenge:
-        Import updateDoc and doc from 'firebase/firestore'
-        
-        Use the code from the documentation to make this function work.
-        
-        The function should update the correct post in the database using the docId.
-        
-        The body field should be updated with newBody as the new value.
-     */
 }
 
 // -------- FOR FETCH BUTTON -------------
@@ -252,6 +244,10 @@ async function updatePostInDB(docId, newBody) {
 //     renderPost(postsEl, { createdAt, body, mood });
 //   });
 // }
+
+async function deletePostFromDB(docId) {
+  await deleteDoc(doc(db, postsCollection, docId));
+}
 
 function fetchInRealtimeAndRenderPostsFromDB(query, user) {
   onSnapshot(query, (querySnapshot) => {
@@ -395,6 +391,22 @@ function createPostUpdateButton(wholeDoc) {
   return button;
 }
 
+function createPostDeleteButton(wholeDoc) {
+  const postId = wholeDoc.id;
+
+  /* 
+        <button class="delete-color">Delete</button>
+    */
+  const button = document.createElement("button");
+  button.textContent = "Delete";
+  button.classList.add("delete-color");
+  button.addEventListener("click", function () {
+    console.log("Delete post");
+    deletePostFromDB(postId);
+  });
+  return button;
+}
+
 function createPostFooter(wholeDoc) {
   /* 
         <div class="footer">
@@ -405,6 +417,7 @@ function createPostFooter(wholeDoc) {
   footerDiv.className = "footer";
 
   footerDiv.appendChild(createPostUpdateButton(wholeDoc));
+  footerDiv.appendChild(createPostDeleteButton(wholeDoc));
 
   return footerDiv;
 }
